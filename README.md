@@ -1,0 +1,1 @@
+C program implementing various scheduler algorithms... mainly FCFS, SJF, RR, and MLFQ. The current version’s a bit wonky, with FCFS being simple in-order execution and MLFQ still needing updates to work properly. The file shows different ways of implementing schedulers in C, from naive to more idiomatic approaches that align a bit more with how real OS schedulers work :)
