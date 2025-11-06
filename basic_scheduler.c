@@ -32,15 +32,19 @@ void printList(struct Node *head) {
 }
 
 void clearQueue(struct Node **head, struct Node **tail, struct Node **head2, struct Node **tail2) {
-    struct Node *temp;
+    if (*head2 == NULL) return;
 
-    while (*head2 != NULL) {
-        temp = *head2;
-        *head2 = (*head2)->next;
-        (*tail)->next = temp;
+    if (*head == NULL) {
+        *head = *head2;
+        *tail = *tail2;
+    } else {
+        (*tail)->next = *head2;
+        *tail = *tail2;
     }
+
     *head2 = *tail2 = NULL;
 }
+
 
 void enqueueReset(struct Job jobs[], struct Node **head, struct Node **tail, int len) {
     for(int i=0; i < len; i++) {
@@ -303,8 +307,7 @@ void sjfNP2(struct Job jobs2[], int len)
 }
 
 // Uses a ready queue, inefficient dueto storing entire struct in readyQueue
-void sjfNP3(struct Job jobs2[], int len)
-{
+void sjfNP3(struct Job jobs2[], int len) {
     struct Job *readyQueue = (struct Job *)malloc(len * sizeof(struct Job));
     struct Job helperStruct;
     int current_time = 0;
@@ -312,23 +315,18 @@ void sjfNP3(struct Job jobs2[], int len)
     int smallest_burst = INT_MAX;
     int smallest_index = 0;
     int remaining_jobs = len;
-    while (remaining_jobs > 0)
-    {
+    while (remaining_jobs > 0) {
         smallest_burst = INT_MAX;
-        for (int i = 0; i < len; i++)
-        {
-            if (jobs2[i].response == -1 && jobs2[i].inQueue == false && jobs2[i].arrival_time <= current_time)
-            {
+        for (int i = 0; i < len; i++) {
+            if (jobs2[i].response == -1 && jobs2[i].inQueue == false && jobs2[i].arrival_time <= current_time) {
                 readyQueue[readyCount] = jobs2[i];
                 jobs2[i].inQueue = true;
                 readyCount++;
             }
         }
 
-        for (int i = 0; i < readyCount; i++)
-        {
-            if (readyQueue[i].cpu_burst < smallest_burst)
-            {
+        for (int i = 0; i < readyCount; i++) {
+            if (readyQueue[i].cpu_burst < smallest_burst) {
                 smallest_burst = readyQueue[i].cpu_burst;
                 smallest_index = i;
             }
@@ -336,10 +334,8 @@ void sjfNP3(struct Job jobs2[], int len)
 
         helperStruct = readyQueue[smallest_index];
 
-        for (int i = 0; i < len; i++)
-        {
-            if (helperStruct.serial == jobs2[i].serial)
-            {
+        for (int i = 0; i < len; i++) {
+            if (helperStruct.serial == jobs2[i].serial) {
                 if (remaining_jobs == len)
                     jobs2[i].start = jobs2[i].arrival_time;
                 else
@@ -364,8 +360,7 @@ void sjfNP3(struct Job jobs2[], int len)
 }
 
 // Much more efficient, uses index(like a pointer)
-void sjfNP4(struct Job jobs2[], int len)
-{
+void sjfNP4(struct Job jobs2[], int len) {
     int *readyQueue = (int *)malloc(len * sizeof(int));
     int current_time = 0;
     int readyCount = 0;
@@ -373,23 +368,18 @@ void sjfNP4(struct Job jobs2[], int len)
     int smallest_index = 0;
     int si = 0;
     int remaining_jobs = len;
-    while (remaining_jobs > 0)
-    {
+    while (remaining_jobs > 0) {
         smallest_burst = INT_MAX;
-        for (int i = 0; i < len; i++)
-        {
-            if (jobs2[i].response == -1 && jobs2[i].inQueue == false && jobs2[i].arrival_time <= current_time)
-            {
+        for (int i = 0; i < len; i++) {
+            if (jobs2[i].response == -1 && jobs2[i].inQueue == false && jobs2[i].arrival_time <= current_time) {
                 readyQueue[readyCount] = i;
                 jobs2[i].inQueue = true;
                 readyCount++;
             }
         }
 
-        for (int i = 0; i < readyCount; i++)
-        {
-            if (jobs2[readyQueue[i]].cpu_burst < smallest_burst)
-            {
+        for (int i = 0; i < readyCount; i++) {
+            if (jobs2[readyQueue[i]].cpu_burst < smallest_burst) {
                 smallest_burst = jobs2[readyQueue[i]].cpu_burst;
                 smallest_index = readyQueue[i];
                 si = i;
@@ -406,8 +396,7 @@ void sjfNP4(struct Job jobs2[], int len)
         current_time = jobs2[smallest_index].end;
         remaining_jobs--;
 
-        for (int i = si; i < readyCount - 1; i++)
-        {
+        for (int i = si; i < readyCount - 1; i++) {
             readyQueue[i] = readyQueue[i + 1];
         }
         readyCount--;
@@ -637,10 +626,9 @@ void rr(struct Job jobs[], int len) {
 }
 
 
-
 //######### Multi-level Feedback Queue ########### //
 
-
+// Still incorrect.. Need to fix sudden dequeue of nodes inside loop
 void MLFQ(struct Job jobs[], int len) {
     struct Node *head = NULL, *tail = NULL;
     struct Node *head2 = NULL, *tail2 = NULL;
@@ -664,16 +652,19 @@ void MLFQ(struct Job jobs[], int len) {
             enqueueFirst(jobs, &head, &tail, len, current_time);
 
             // Check alloted time for each in queues and degrade them if time's up 
-            degradeQueue(jobs, &head, &tail, &head2, &tail2);
+            // degradeQueue(jobs, &head, &tail, &head2, &tail2);
 
             printf("First List: \n");
             printList(head);
             printf("Second List: \n");
             printList(head2);
-
+            printf("\n\n");
+            
+            int quantum_time = 20;
+            
             isQ1Empty = checkEmpty(head);
             isQ2Empty = checkEmpty(head2);
-
+            
             if (isQ1Empty && isQ2Empty) {
                 current_time+=1;
                 reset_timer-=1;
@@ -694,6 +685,7 @@ void MLFQ(struct Job jobs[], int len) {
 
             curNode = *activeHead;
             curJob = &jobs[curNode->data];
+            bool isBreak = false;
 
             // Move head forward
             *activeHead = curNode->next;
@@ -703,42 +695,67 @@ void MLFQ(struct Job jobs[], int len) {
                 curJob->start = current_time;
                 curJob->response = curJob->start - curJob->arrival_time;
             }
+            while(quantum_time >= 0) {
+                current_time++;
+                curJob->remaining_time--;
+                curJob->alloted_left--;
+                reset_timer--;
+                quantum_time--;
 
-            current_time++;
-            curJob->remaining_time--;
-            curJob->alloted_left--;
-            reset_timer--;
-
-
-            if (curJob->remaining_time <= 0) {
-            // finished
-                curJob->end = current_time;
-                curJob->turnaround = curJob->end - curJob->arrival_time;
-                curJob->inQueue = false;
-                remaining_jobs--;
-                free(curNode);
-            } 
-            else if (curJob->alloted_left <= 0) {
-                // degrade to next queue
-                break;
-            } 
-            else {
-                // put back to end of same queue
-                if (*activeTail == NULL) {
-                    *activeHead = *activeTail = curNode;
-                } else {
-                    (*activeTail)->next = curNode;
-                    *activeTail = curNode;
+                enqueueFirst(jobs, &head, &tail, len, current_time);
+                printf("1 - ");
+                printList(curNode);
+                printf("\n");
+                
+                if(activeTail == &tail2){
+                    isQ1Empty = checkEmpty(head);
+                    if(!isQ1Empty) {
+                        printf("2 - ");
+                        printList(head);
+                        printf("\n");
+                        isBreak = true;
+                        break;
+                    } 
                 }
+                
+                if (curJob->remaining_time <= 0) {
+                    // finished
+                    curJob->end = current_time;
+                    curJob->turnaround = curJob->end - curJob->arrival_time;
+                    curJob->inQueue = false;
+                    remaining_jobs--;
+                    free(curNode);
+                    printf("Job completed!! Breaking");
+                    isBreak = true;
+                    break;
+                } 
+                else if (curJob->alloted_left <= 0) {
+                    printf("3 - ");
+                    printList(head);
+                    printf("\n");
+                    printf("%d\n", curJob->alloted_left);
+                    tail2->next = curNode;
+                    tail2 = curNode;
+                    printf("Alloted time up!! Breaking");
+                    isBreak = true;
+                    break;
+                } 
+                
+                printf("%d unit over inside if and else block\n",quantum_time);
+                    
+            } 
+
+            if(!isBreak) {
+                curNode->next = NULL;
+                if (*activeTail == NULL) *activeHead = *activeTail = curNode;
+                else (*activeTail)->next = curNode, *activeTail = curNode;
             }
-
-
-
-
-            printf("20 units over inside if and else block");
+        printf("%d unit over inside if and else blockk\n",quantum_time);
         }
     }
 }
+
+
 
 
 
