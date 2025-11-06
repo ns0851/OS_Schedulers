@@ -628,7 +628,8 @@ void rr(struct Job jobs[], int len) {
 
 //######### Multi-level Feedback Queue ########### //
 
-// Still incorrect.. Need to fix sudden dequeue of nodes inside loop
+// faulty logic... breaks after first one
+
 void MLFQ(struct Job jobs[], int len) {
     struct Node *head = NULL, *tail = NULL;
     struct Node *head2 = NULL, *tail2 = NULL;
@@ -652,19 +653,16 @@ void MLFQ(struct Job jobs[], int len) {
             enqueueFirst(jobs, &head, &tail, len, current_time);
 
             // Check alloted time for each in queues and degrade them if time's up 
-            // degradeQueue(jobs, &head, &tail, &head2, &tail2);
+            degradeQueue(jobs, &head, &tail, &head2, &tail2);
 
             printf("First List: \n");
             printList(head);
             printf("Second List: \n");
             printList(head2);
-            printf("\n\n");
-            
-            int quantum_time = 20;
-            
+
             isQ1Empty = checkEmpty(head);
             isQ2Empty = checkEmpty(head2);
-            
+
             if (isQ1Empty && isQ2Empty) {
                 current_time+=1;
                 reset_timer-=1;
@@ -685,7 +683,6 @@ void MLFQ(struct Job jobs[], int len) {
 
             curNode = *activeHead;
             curJob = &jobs[curNode->data];
-            bool isBreak = false;
 
             // Move head forward
             *activeHead = curNode->next;
@@ -695,64 +692,117 @@ void MLFQ(struct Job jobs[], int len) {
                 curJob->start = current_time;
                 curJob->response = curJob->start - curJob->arrival_time;
             }
-            while(quantum_time >= 0) {
-                current_time++;
-                curJob->remaining_time--;
-                curJob->alloted_left--;
-                reset_timer--;
-                quantum_time--;
 
-                enqueueFirst(jobs, &head, &tail, len, current_time);
-                printf("1 - ");
-                printList(curNode);
-                printf("\n");
-                
-                if(activeTail == &tail2){
-                    isQ1Empty = checkEmpty(head);
-                    if(!isQ1Empty) {
-                        printf("2 - ");
-                        printList(head);
-                        printf("\n");
-                        isBreak = true;
-                        break;
-                    } 
-                }
-                
-                if (curJob->remaining_time <= 0) {
-                    // finished
-                    curJob->end = current_time;
-                    curJob->turnaround = curJob->end - curJob->arrival_time;
-                    curJob->inQueue = false;
-                    remaining_jobs--;
-                    free(curNode);
-                    printf("Job completed!! Breaking");
-                    isBreak = true;
-                    break;
-                } 
-                else if (curJob->alloted_left <= 0) {
-                    printf("3 - ");
-                    printList(head);
-                    printf("\n");
-                    printf("%d\n", curJob->alloted_left);
-                    tail2->next = curNode;
-                    tail2 = curNode;
-                    printf("Alloted time up!! Breaking");
-                    isBreak = true;
-                    break;
-                } 
-                
-                printf("%d unit over inside if and else block\n",quantum_time);
-                    
+            current_time++;
+            curJob->remaining_time--;
+            curJob->alloted_left--;
+            reset_timer--;
+
+
+            if (curJob->remaining_time <= 0) {
+            // finished
+                curJob->end = current_time;
+                curJob->turnaround = curJob->end - curJob->arrival_time;
+                curJob->inQueue = false;
+                remaining_jobs--;
+                free(curNode);
             } 
-
-            if(!isBreak) {
-                curNode->next = NULL;
-                if (*activeTail == NULL) *activeHead = *activeTail = curNode;
-                else (*activeTail)->next = curNode, *activeTail = curNode;
+            else if (curJob->alloted_left <= 0) {
+                // degrade to next queue
+                break;
+            } 
+            else {
+                // put back to end of same queue
+                if (*activeTail == NULL) {
+                    *activeHead = *activeTail = curNode;
+                } else {
+                    (*activeTail)->next = curNode;
+                    *activeTail = curNode;
+                }
             }
-        printf("%d unit over inside if and else blockk\n",quantum_time);
+            printf("20 units over inside if and else block");
         }
     }
+}
+
+// Attempt to better algorithm... under progress
+void MLFQ2(struct Job jobs[], int len) {
+    struct Node *head = NULL, *tail = NULL;
+    struct Node *head2 = NULL, *tail2 = NULL;
+
+    int current_time = 0;
+    int quantum_time = 20;
+    int reset_timer = 100;
+    int remaining_jobs = len;
+
+    while(remaining_jobs > 0) {
+        if(reset_timer <= 0) {
+            clearQueue(&head, &tail, &head2, &tail2);
+            enqueueReset(jobs, &head, &tail, len);
+        } else {
+            enqueueFirst(jobs, &head, &tail, len, current_time);
+            
+            if(head==NULL && head2==NULL) {
+                current_time++;
+                reset_timer--;
+            }
+            
+            struct Node *current_node;
+            struct Job *current_job;
+            bool isBreak = false;
+            
+            while(head != NULL) {
+                printList(head);
+                enqueueFirst(jobs, &head, &tail, len, current_time);
+                current_node = head;
+                current_job = &jobs[current_node->data];
+
+
+                if(current_job->response == -1) {
+                    current_job->start = current_time;
+                    current_job->response = current_job->start - current_job->arrival_time;
+                }
+
+                quantum_time = 20;
+
+                
+                while(quantum_time >= 0) {
+                    current_time++;
+                    reset_timer--;
+                    quantum_time--;
+                    current_job->alloted_left--;
+                    current_job->remaining_time--;
+                    
+                    if(current_job->alloted_left == 0) {
+                        current_job->alloted_left = current_job->alloted_time;
+                        head = head->next;
+                        current_node->next = NULL;
+                        tail2->next = current_node;
+                        tail2 = current_node;
+                        break;
+                    } else if(current_job->remaining_time == 0) {
+                        current_job->end = current_time;
+                        current_job->turnaround = current_job->end - current_job->arrival_time;
+                        current_job->inQueue = false;
+                        remaining_jobs--;
+                        current_node->next = NULL;
+                        free(current_node);
+                        break;
+                    }
+                }
+                current_node->next = NULL;
+                tail->next = current_node;
+                tail = current_node;
+            } 
+
+            if(head == NULL && head2 != NULL) {
+                reset_timer--;
+                current_time++;
+                printList(head2);
+            }
+        }
+    }
+
 }
 
 
@@ -771,7 +821,7 @@ int main() {
     initStruct(&jobs2[2], 3, 25, 15, -1, 100); // The Sniper
 
     rr(jobs, 3);
-    MLFQ (jobs2, 3);
+    MLFQ2 (jobs2, 3);
 
     printStruct(jobs, 3);
     printStruct(jobs2, 3);
