@@ -734,53 +734,85 @@ void MLFQ2(struct Job jobs[], int len) {
     int quantum_time = 20;
     int reset_timer = 100;
     int remaining_jobs = len;
+    bool isBreak = false;
 
-    while(remaining_jobs > 0) {
-        if(reset_timer <= 0) {
+    while (remaining_jobs > 0) {
+        if (reset_timer <= 0) {
             clearQueue(&head, &tail, &head2, &tail2);
             enqueueReset(jobs, &head, &tail, len);
         } else {
             enqueueFirst(jobs, &head, &tail, len, current_time);
-            
-            if(head==NULL && head2==NULL) {
+
+            if (head == NULL && head2 == NULL) {
                 current_time++;
                 reset_timer--;
             }
-            
+
             struct Node *current_node;
             struct Job *current_job;
             bool isBreak = false;
-            
-            while(head != NULL) {
+
+            while (head != NULL) {
+                printf("\n[DEBUG] --- Starting top of outer while (head queue) ---\n");
                 printList(head);
+
                 enqueueFirst(jobs, &head, &tail, len, current_time);
                 current_node = head;
                 current_job = &jobs[current_node->data];
 
-
-                if(current_job->response == -1) {
+                if (current_job->response == -1) {
                     current_job->start = current_time;
                     current_job->response = current_job->start - current_job->arrival_time;
                 }
 
                 quantum_time = 20;
 
-                
-                while(quantum_time >= 0) {
+                printf("[DEBUG] Entering inner while for Job ID %d with quantum_time = %d\n",
+                       current_node->data, quantum_time);
+
+                while (quantum_time > 0) {
                     current_time++;
                     reset_timer--;
                     quantum_time--;
                     current_job->alloted_left--;
                     current_job->remaining_time--;
-                    
-                    if(current_job->alloted_left == 0) {
+
+                    if (current_job->alloted_left == 0) {
+                        isBreak = true;
+                        printf("\n[DEBUG] Job %d used up its allotted time slice. Moving to lower queue.\n",
+                               current_node->data);
+                        printList(head);
+                        printf("[DEBUG] Current lower queue (before move):\n");
+                        printList(head2);
+                        printf("\n");
+
                         current_job->alloted_left = current_job->alloted_time;
-                        head = head->next;
+
+                        if (head->next != NULL)
+                            head = head->next;
+                        else
+                            head = NULL, tail = NULL;
+
+                        if (tail2 != NULL) {
+                            tail2->next = current_node;
+                            tail2 = current_node;
+                        } else {
+                            head2 = tail2 = current_node;
+                        }
+
                         current_node->next = NULL;
-                        tail2->next = current_node;
-                        tail2 = current_node;
+
+                        printf("[DEBUG] Job %d moved successfully to lower queue.\n", current_node->data);
+                        printf("[DEBUG] Updated high-priority queue:\n");
+                        printList(head);
+                        printf("[DEBUG] Updated lower-priority queue:\n");
+                        printList(head2);
+                        printf("\n");
                         break;
-                    } else if(current_job->remaining_time == 0) {
+                    } else if (current_job->remaining_time == 0) {
+                        isBreak = true;
+                        if(head->next != NULL) head = head->next;
+                        else head = NULL, tail = NULL;
                         current_job->end = current_time;
                         current_job->turnaround = current_job->end - current_job->arrival_time;
                         current_job->inQueue = false;
@@ -788,25 +820,122 @@ void MLFQ2(struct Job jobs[], int len) {
                         current_node->next = NULL;
                         free(current_node);
                         break;
+                    } else {
+                        printf("[DEBUG] Job %d still running... quantum_time left: %d\n",
+                               current_node->data, quantum_time);
                     }
                 }
+                if(isBreak) break;
+                if (current_node == head || head == NULL) break;
+
+                printf("[DEBUG] End of inner while for Job ID %d\n", current_node->data);
+                printList(head);
+
+
                 current_node->next = NULL;
                 tail->next = current_node;
                 tail = current_node;
-            } 
 
-            if(head == NULL && head2 != NULL) {
-                reset_timer--;
-                current_time++;
-                printList(head2);
+                printf("[DEBUG] Job %d moved to end of same queue (Round Robin rotation)\n",
+                       current_node->data);
+                printf("[DEBUG] Updated queue after rotation:\n");
+                printList(head);
+            }
+
+            printf("[DEBUG] End of head queue processing.\n");
+
+            while (head == NULL && head2 != NULL) {
+                printf("\n[DEBUG] --- Starting top of outer while (head queue) ---\n");
+                printList(head);
+
+                enqueueFirst(jobs, &head, &tail, len, current_time);
+                current_node = head;
+                current_job = &jobs[current_node->data];
+
+                if (current_job->response == -1) {
+                    current_job->start = current_time;
+                    current_job->response = current_job->start - current_job->arrival_time;
+                }
+
+                quantum_time = 20;
+
+                printf("[DEBUG] Entering inner while for Job ID %d with quantum_time = %d\n",
+                       current_node->data, quantum_time);
+
+                while (quantum_time > 0) {
+                    current_time++;
+                    reset_timer--;
+                    quantum_time--;
+                    current_job->alloted_left--;
+                    current_job->remaining_time--;
+
+                    if (current_job->alloted_left == 0) {
+                        isBreak = true;
+                        printf("\n[DEBUG] Job %d used up its allotted time slice. Moving to lower queue.\n",
+                               current_node->data);
+                        printList(head);
+                        printf("[DEBUG] Current lower queue (before move):\n");
+                        printList(head2);
+                        printf("\n");
+
+                        current_job->alloted_left = current_job->alloted_time;
+
+                        if (head->next != NULL)
+                            head = head->next;
+                        else
+                            head = NULL, tail = NULL;
+
+                        if (tail2 != NULL) {
+                            tail2->next = current_node;
+                            tail2 = current_node;
+                        } else {
+                            head2 = tail2 = current_node;
+                        }
+
+                        current_node->next = NULL;
+
+                        printf("[DEBUG] Job %d moved successfully to lower queue.\n", current_node->data);
+                        printf("[DEBUG] Updated high-priority queue:\n");
+                        printList(head);
+                        printf("[DEBUG] Updated lower-priority queue:\n");
+                        printList(head2);
+                        printf("\n");
+                        break;
+                    } else if (current_job->remaining_time == 0) {
+                        isBreak = true;
+                        if(head->next != NULL) head = head->next;
+                        else head = NULL, tail = NULL;
+                        current_job->end = current_time;
+                        current_job->turnaround = current_job->end - current_job->arrival_time;
+                        current_job->inQueue = false;
+                        remaining_jobs--;
+                        current_node->next = NULL;
+                        free(current_node);
+                        break;
+                    } else {
+                        printf("[DEBUG] Job %d still running... quantum_time left: %d\n",
+                               current_node->data, quantum_time);
+                    }
+                }
+                if(isBreak) break;
+                if (current_node == head || head == NULL) break;
+
+                printf("[DEBUG] End of inner while for Job ID %d\n", current_node->data);
+                printList(head);
+
+
+                current_node->next = NULL;
+                tail->next = current_node;
+                tail = current_node;
+
+                printf("[DEBUG] Job %d moved to end of same queue (Round Robin rotation)\n",
+                       current_node->data);
+                printf("[DEBUG] Updated queue after rotation:\n");
+                printList(head);
             }
         }
     }
-
 }
-
-
-
 
 
 int main() {
@@ -816,7 +945,7 @@ int main() {
     initStruct(&jobs[2], 3, 2, 200, -1, 45);
 
     struct Job jobs2[3];
-    initStruct(&jobs2[0], 1, 0, 80, -1, 20);  // The Grunt
+    initStruct(&jobs2[0], 1, 0, 80, -1, 22);  // The Grunt
     initStruct(&jobs2[1], 2, 10, 40, -1, 100); // The Priority Holder
     initStruct(&jobs2[2], 3, 25, 15, -1, 100); // The Sniper
 
