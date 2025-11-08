@@ -31,7 +31,8 @@ void printList(struct Node *head) {
     printf("NULL\n");
 }
 
-void clearQueue(struct Node **head, struct Node **tail, struct Node **head2, struct Node **tail2) {
+void clearQueue(struct Node **head, struct Node **tail, struct Node **head2, struct Node **tail2, int *reset) {
+    *reset = 100;
     if (*head2 == NULL) return;
 
     if (*head == NULL) {
@@ -645,7 +646,7 @@ void MLFQ(struct Job jobs[], int len) {
         // Enqueue all running jobs to highest priority Queue on timer reset
         if(reset_timer == 0) {
             printf("Resetting\n");
-            clearQueue(&head, &tail, &head2, &tail2);
+            // clearQueue(&head, &tail, &head2, &tail2);
             printList(head);
             enqueueReset(jobs, &head, &tail, len);
             reset_timer = 100;
@@ -734,11 +735,14 @@ void MLFQ2(struct Job jobs[], int len) {
     int quantum_time = 20;
     int reset_timer = 100;
     int remaining_jobs = len;
+    int *reset;
     bool isBreak = false;
 
     while (remaining_jobs > 0) {
         if (reset_timer <= 0) {
-            clearQueue(&head, &tail, &head2, &tail2);
+            reset = &reset_timer;
+            printf("Resetting\n");
+            clearQueue(&head, &tail, &head2, &tail2, reset);
             enqueueReset(jobs, &head, &tail, len);
         } else {
             enqueueFirst(jobs, &head, &tail, len, current_time);
@@ -751,6 +755,7 @@ void MLFQ2(struct Job jobs[], int len) {
             struct Node *current_node;
             struct Job *current_job;
             bool isBreak = false;
+
 
             while (head != NULL) {
                 printf("\n[DEBUG] --- Starting top of outer while (head queue) ---\n");
@@ -831,7 +836,6 @@ void MLFQ2(struct Job jobs[], int len) {
                 printf("[DEBUG] End of inner while for Job ID %d\n", current_node->data);
                 printList(head);
 
-
                 current_node->next = NULL;
                 tail->next = current_node;
                 tail = current_node;
@@ -845,11 +849,11 @@ void MLFQ2(struct Job jobs[], int len) {
             printf("[DEBUG] End of head queue processing.\n");
 
             while (head == NULL && head2 != NULL) {
-                printf("\n[DEBUG] --- Starting top of outer while (head queue) ---\n");
-                printList(head);
+                printf("\n[DEBUG] --- Starting top of outer while (head2 queue) ---\n");
+                printList(head2);
 
                 enqueueFirst(jobs, &head, &tail, len, current_time);
-                current_node = head;
+                current_node = head2;
                 current_job = &jobs[current_node->data];
 
                 if (current_job->response == -1) {
@@ -859,7 +863,7 @@ void MLFQ2(struct Job jobs[], int len) {
 
                 quantum_time = 20;
 
-                printf("[DEBUG] Entering inner while for Job ID %d with quantum_time = %d\n",
+                printf("[DEBUG] Entering inner while for Job ID %d with quantum_time = %d in lower priority queue\n",
                        current_node->data, quantum_time);
 
                 while (quantum_time > 0) {
@@ -868,6 +872,14 @@ void MLFQ2(struct Job jobs[], int len) {
                     quantum_time--;
                     current_job->alloted_left--;
                     current_job->remaining_time--;
+
+                    if (reset_timer <= 0) {
+                        isBreak = true;
+                        reset = &reset_timer;
+                        printf("Resetting\n");
+                        clearQueue(&head, &tail, &head2, &tail2, reset);
+                        enqueueReset(jobs, &head, &tail, len);
+                    }
 
                     if (current_job->alloted_left == 0) {
                         isBreak = true;
@@ -880,15 +892,15 @@ void MLFQ2(struct Job jobs[], int len) {
 
                         current_job->alloted_left = current_job->alloted_time;
 
-                        if (head->next != NULL)
-                            head = head->next;
+                        if (head2->next != NULL)
+                            head2 = head2->next;
                         else
-                            head = NULL, tail = NULL;
+                            head2 = NULL, tail2 = NULL;
 
                         if (tail2 != NULL) {
                             tail2->next = current_node;
                             tail2 = current_node;
-                        } else {
+                        } else {            
                             head2 = tail2 = current_node;
                         }
 
@@ -903,8 +915,8 @@ void MLFQ2(struct Job jobs[], int len) {
                         break;
                     } else if (current_job->remaining_time == 0) {
                         isBreak = true;
-                        if(head->next != NULL) head = head->next;
-                        else head = NULL, tail = NULL;
+                        if(head2->next != NULL) head2 = head2->next;
+                        else head2 = NULL, tail2 = NULL;
                         current_job->end = current_time;
                         current_job->turnaround = current_job->end - current_job->arrival_time;
                         current_job->inQueue = false;
@@ -913,28 +925,32 @@ void MLFQ2(struct Job jobs[], int len) {
                         free(current_node);
                         break;
                     } else {
-                        printf("[DEBUG] Job %d still running... quantum_time left: %d\n",
-                               current_node->data, quantum_time);
+                        printf("[DEBUG] Job %d still running... quantum_time left: %d with %d time left and %d reset\n",
+                               current_node->data, quantum_time, current_job->remaining_time, reset_timer);
+                        
+                        printf("end");
                     }
                 }
+                printList(head2);
                 if(isBreak) break;
-                if (current_node == head || head == NULL) break;
+                if (current_node == head2 || head2 == NULL) break;
 
                 printf("[DEBUG] End of inner while for Job ID %d\n", current_node->data);
-                printList(head);
+                printList(head2);
 
 
                 current_node->next = NULL;
-                tail->next = current_node;
-                tail = current_node;
+                tail2->next = current_node;
+                tail2 = current_node;
 
                 printf("[DEBUG] Job %d moved to end of same queue (Round Robin rotation)\n",
                        current_node->data);
                 printf("[DEBUG] Updated queue after rotation:\n");
-                printList(head);
+                printList(head2);
             }
         }
     }
+    printf("completed run");
 }
 
 
@@ -951,6 +967,8 @@ int main() {
 
     rr(jobs, 3);
     MLFQ2 (jobs2, 3);
+
+    printf("This is after jobs done!");
 
     printStruct(jobs, 3);
     printStruct(jobs2, 3);
