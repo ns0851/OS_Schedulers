@@ -111,7 +111,7 @@ void printStruct(struct Job jobs[], int len)
                jobs[i].turnaround,
                jobs[i].response);
     }
-    printf("---------------------------------------------------------------\n");
+    printf("---------------------------------------------------------------\n");  
 }
 
 void degradeQueue(struct Job *j, struct Node **head, struct Node **tail, struct Node **head2, struct Node **tail2) {
@@ -415,7 +415,7 @@ void MLFQ2(struct Job jobs[], int len) {
                        current_node->data, quantum_time);
 
                 while (quantum_time > 0) {
-                    current_time++;
+                    current_time++; 
                     reset_timer--;
                     quantum_time--;
                     current_job->alloted_left--;
@@ -476,7 +476,6 @@ void MLFQ2(struct Job jobs[], int len) {
                     } else {
                         printf("[DEBUG] Job %d still running... quantum_time left: %d with %d time left and %d reset\n",
                                current_node->data, quantum_time, current_job->remaining_time, reset_timer);
-                        
                         printf("end");
                     }
                 }
@@ -501,6 +500,43 @@ void MLFQ2(struct Job jobs[], int len) {
     printf("completed run");
 }
 
+void MLFQ3(struct Job jobs[], int len) {
+    struct Node *head = NULL, *tail = NULL;
+    struct Node *head2 = NULL, *tail2 = NULL;
+
+    int current_time = 0;
+    int quantum_time = 20;
+    int reset_timer = 100;
+    int remaining_jobs = len;
+    int *reset;
+    bool isBreak = false;
+
+    enqueueFirst(jobs, &head, &tail, len, current_time);
+
+    while(remaining_jobs > 0) {
+        if(head == NULL && head2 == NULL) {
+            current_time++;
+        }
+
+         
+
+        while(quantum_time > 0) {
+            current_time++;
+            reset_timer--;
+            quantum_time--;
+
+            enqueueFirst(jobs, &head, &tail, len, current_time);
+
+            if(reset_timer == 0) {
+                printf("Resetting\n");
+                clearQueue(&head, &tail, &head2, &tail2, reset);
+                printList(head);
+                enqueueReset(jobs, &head, &tail, len);
+                reset_timer = 100;
+            }
+        }
+    }
+}
 
 
 
@@ -517,7 +553,7 @@ int main() {
 
 
     // MLFQ2 (jobs, 3);
-    MLFQ2(jobs2, 3);
+    MLFQ3(jobs2, 3);
 
     printf("This is after jobs done!");
     printStruct(jobs2, 3);
