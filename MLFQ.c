@@ -49,7 +49,7 @@ void clearQueue(struct Node **head, struct Node **tail, struct Node **head2, str
 
 void enqueueReset(struct Job jobs[], struct Node **head, struct Node **tail, int len) {
     for(int i=0; i < len; i++) {
-        if (jobs[i].inQueue && jobs[i].remaining_time > 0) {
+        if (jobs[i].inQueue && jobs[i].remaining_time > 0 && jobs[i].response == -1) {
             struct Node *newNode = (struct Node *)malloc(sizeof(struct Node));
             newNode->data = i;
             newNode->next = NULL;
@@ -93,6 +93,7 @@ void initStruct(struct Job *j, int s, int a, int c, int r, int aa)
     j->remaining_time = c;
     j->alloted_time = aa;
     j->alloted_left = aa;
+    j->inQueue = false;
 }
 
 void printStruct(struct Job jobs[], int len)
@@ -190,8 +191,8 @@ void MLFQ(struct Job jobs[], int len) {
             printf("Second List: \n");
             printList(head2);
 
-            isQ1Empty = checkEmpty(head);
-            isQ2Empty = checkEmpty(head2);
+            isQ1Empty = false;
+            isQ2Empty = false;
 
             if (isQ1Empty && isQ2Empty) {
                 current_time+=1;
@@ -500,6 +501,7 @@ void MLFQ2(struct Job jobs[], int len) {
     printf("completed run");
 }
 
+// Attemp-03 with better approach and complexity
 void MLFQ3(struct Job jobs[], int len) {
     struct Node *head = NULL, *tail = NULL;
     struct Node *head2 = NULL, *tail2 = NULL;
@@ -510,33 +512,144 @@ void MLFQ3(struct Job jobs[], int len) {
     int remaining_jobs = len;
     int *reset;
     bool isBreak = false;
-
     enqueueFirst(jobs, &head, &tail, len, current_time);
 
+    printf("=== MLFQ3 START ===\n");
+
     while(remaining_jobs > 0) {
+        struct Node *currentNode;
+        struct Job *job;
+        struct Node *temp;
+        struct Node **activeHead, **activeTail;
+        quantum_time = 20;
+
         if(head == NULL && head2 == NULL) {
+            printf("[TIME %d] Both queues empty — advancing time.\n", current_time);
             current_time++;
+            enqueueFirst(jobs, &head, &tail, len, current_time);
+            continue;
         }
 
-         
+        if(head != NULL) {
+            currentNode = head;
+            activeHead = &head;
+            activeTail = &tail;
+            job = &jobs[currentNode->data];
+            printf("[TIME %d] Running job %d from Q1\n", current_time, currentNode->data);
+        } else if(head2 != NULL) {
+            currentNode = head2;
+            activeHead = &head2;
+            activeTail = &tail2;
+            job = &jobs[currentNode->data];
+            printf("[TIME %d] Running job %d from Q2\n", current_time, currentNode->data);
+        }
+
+        if(job->response == -1) {
+            job->start = current_time;
+            job->response = job->start - job->arrival_time;
+            printf("Job %d first response: start=%d response=%d\n",
+                   currentNode->data, job->start, job->response);
+        }
 
         while(quantum_time > 0) {
             current_time++;
             reset_timer--;
             quantum_time--;
+            job->alloted_left--;
+            job->remaining_time--;
+            isBreak = false;
+
+            reset = &reset_timer;
 
             enqueueFirst(jobs, &head, &tail, len, current_time);
 
             if(reset_timer == 0) {
-                printf("Resetting\n");
+                printf("\n=== RESETTING at TIME %d ===\n", current_time);
+                printf("Rest time Now: %d\n", reset_timer);
                 clearQueue(&head, &tail, &head2, &tail2, reset);
+                printf("Rest time Now: %d\n", reset_timer);
                 printList(head);
                 enqueueReset(jobs, &head, &tail, len);
                 reset_timer = 100;
+                printf("=== RESET DONE ===\n\n");
             }
+
+            if(job->remaining_time <= 0) {
+                isBreak = true;
+                temp = currentNode;
+                job->end = current_time;
+                job->turnaround = job->end - job->arrival_time;
+                job->inQueue = false;
+
+                printf("[TIME %d] Job %d completed | turnaround=%d end=%d\n",
+                       current_time, currentNode->data, job->turnaround, job->end);
+
+                if(currentNode->next == NULL) (*activeHead) = (*activeTail) = NULL;
+                else {
+                    (*activeHead) = (*activeHead)->next;
+                    temp->next = NULL;
+                }
+                remaining_jobs--;
+                free(currentNode);
+                printf("Remaining jobs: %d\n", remaining_jobs);
+            } else if(job->alloted_left <= 0) {
+                printf("[TIME %d] Job %d exhausted its quantum in Q1 — demoting to Q2\n",
+                       current_time, currentNode->data);
+                if(currentNode == head) {
+                    temp = head;
+                    head = head->next;
+                    temp->next = NULL;
+                    if(tail2 == NULL) head2 = tail2 = currentNode;
+                    else {
+                        tail2->next = temp;
+                        tail2 = temp;
+                        temp = NULL;
+                    }
+                } else {
+                    if((*activeHead)->next == NULL){
+                        printf("ok");
+                    } else {
+                        (*activeHead) = (*activeHead)->next;
+                        currentNode->next = NULL;
+                        (*activeTail)->next = currentNode;
+                        (*activeTail) = currentNode;
+                    }
+                }
+                job->alloted_left = job->alloted_time;
+                isBreak = true;
+            }
+
+            if(isBreak) break;
         }
+
+        printf("\nPrinting List(head): ");
+        printList(head);
+        printf("\n");
+        printf("\nPrinting List(head2): ");
+        printList(head2);
+        printf("\n");
+
+        if(isBreak) {
+            printf("[TIME %d] Breaking inner loop for job %d\n\n", current_time, job->serial);
+            continue;
+        }
+
+        if((*activeHead)->next == NULL) {
+            printf("[TIME %d] Only one node in active queue — skipping rotation.\n\n", current_time);
+            continue;
+        }
+
+        printf("[TIME %d] Rotating job %d to end of active queue\n", current_time, currentNode->data);
+        (*activeHead) = currentNode->next;
+        currentNode->next = NULL;
+        (*activeTail)->next = currentNode;
+        (*activeTail) = currentNode;
+        printf("Rotation done for job %d\n\n", currentNode->data);
     }
+
+    printf("=== MLFQ3 END ===\n");
 }
+
 
 
 
@@ -546,17 +659,21 @@ int main() {
     initStruct(&jobs[1], 2, 10, 100, -1, 20);
     initStruct(&jobs[2], 3, 2, 200, -1, 45);
 
-    struct Job jobs2[3];
-    initStruct(&jobs2[0], 1, 0, 50, -1, 20);   // Early starter, long burst
-    initStruct(&jobs2[1], 2, 5, 25, -1, 15);   // Mid-arrival, medium burst
-    initStruct(&jobs2[2], 3, 12, 30, -1, 10);  // Late arrival, small quantum
+    struct Job jobs2[5];
+    initStruct(&jobs2[0], 1,  0,  15, -1, 10);  // Short interactive job, quick turnaround.
+    initStruct(&jobs2[1], 2,  4,  35, -1, 15);  // Mid-weight job, demotes once or twice.
+    initStruct(&jobs2[2], 3,  8,  60, -1, 20);  // Heavy CPU-bound job, will hit reset cycle.
+    initStruct(&jobs2[3], 4, 12,  10, -1, 10);  // Arrives late, I/O-like quick finish.
+    initStruct(&jobs2[4], 5, 15,  25, -1, 15);  // Balanced job, comes mid-way through others.
+
+    
 
 
     // MLFQ2 (jobs, 3);
-    MLFQ3(jobs2, 3);
+    MLFQ3(jobs2, 5);
 
     printf("This is after jobs done!");
-    printStruct(jobs2, 3);
+    printStruct(jobs2, 5);
 
     return 0;
 }
